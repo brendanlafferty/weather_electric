@@ -12,7 +12,24 @@ _chromedriver = _sel_dict['webdriver']
 os.environ["webdriver.chrome.driver"] = _chromedriver
 
 
+def get_html(url, driver=None):
+    if not driver:
+        driver = webdriver.Chrome(_chromedriver)
+    driver.get(url)
+    # wait until the tr (table row) tag loads before continuing
+    element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'tr')))
+    return driver
+
+
 def get_feature_wu(soup: BeautifulSoup, feature_name: str):
+    """
+    This function scrapes data from wunderground.com's historical data pages.  This specifically scrapes from the daily
+    data and only pulls the "Actual" column from the table. Some feature include "High Temp", "Low Temp", etc.
+    :param soup: BeautifulSoup object of a wundergroud.com historical data page
+    :param feature_name: feature to scrape most are numeric fields except "Actual Time" which is the length of day
+                         string formatted "##h ##m"
+    :return: numeric value of the feature being scraped
+    """
     feature_loc = soup.find(text=feature_name)
 
     value_actual = feature_loc.find_next()
@@ -46,10 +63,7 @@ if __name__ == '__main__':
     url += '2020-07-07'
     fields_dict = yml_d['fields']
     print('URL: {}'.format(url))
-    driver = webdriver.Chrome(_chromedriver)
-    print('Opening website')
-    driver.get(url)
-    element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'tr')))
+    driver = get_html(url)
     soup = BeautifulSoup(driver.page_source, "lxml")
     features = {}
     print('Scraping Data:')
