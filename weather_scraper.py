@@ -1,14 +1,44 @@
-import yaml
+"""
+This is a web-scraping module for scraping data from wunderground.com specifically historical data
+pages. It requires 2 helper yaml files, 1 has the location of the chrome driver application for
+selenium, the other has all the info for scraping wunderground.com.
+selenium.yml:
+    webdriver: path/to/chrome-driver
+
+
+wunderground.yml:
+    url: https://www.wunderground.com/history/daily/--------/date
+     features:
+      High Temp: high
+      Low Temp: low
+      Day Average Temp: temp_mean
+      Precipitation (past 24 hours from 07:53:00): precip
+      Dew Point: dew
+      High: dew_high
+      Low: dew_low
+      Average: dew_mean
+      Max Wind Speed: wind
+      Visibility: vis
+      Sea Level Pressure: pres
+      Actual Time: day_len
+    dates:
+      start: 2020-07-01
+      end: 2020-07-05
+
+
+"""
 import os
-from typing import Dict
-from datetime import date, timedelta
+from typing import Dict, Iterator, Union
 from time import sleep
+from datetime import date, timedelta
+
+import yaml
+import pandas as pd
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import pandas as pd
 
 DataDict = Dict[str, float]
 DailyDict = Dict[date, DataDict]
@@ -44,7 +74,7 @@ def wu_hist_scraper(base_url: str,
         date_str = date_obj.strftime('%Y-%m-%d')
         print('Getting data for: {}'.format(date_str))
         url_whole = base_url + date_str
-        soup, driver = get_soup(url_whole, driver=driver)
+        soup, driver = get_soup_wait_to_load(url_whole, driver=driver)
         daily_features = get_daily_features_wu(soup, feature_dict)
         daily_dict[date_obj] = daily_features
         hourly_table = get_hourly_table_wu(soup, date_obj)
@@ -57,6 +87,12 @@ def wu_hist_scraper(base_url: str,
 
 
 def get_daily_features_wu(soup: BeautifulSoup, feature_dict: Dict[str, str]) -> Dict[str, float]:
+    """
+    iterates through each feature to be scraped and scrapes that feature
+    :param soup: BeautifulSoup of the webpage
+    :param feature_dict: a mapping of wunderground.com fields to clean names
+    :return: a dictionary mapping field name to value
+    """
     features = {}
     for feature in feature_dict:
         value = get_daily_feature_wu(soup, feature)
@@ -65,24 +101,32 @@ def get_daily_features_wu(soup: BeautifulSoup, feature_dict: Dict[str, str]) -> 
     return features
 
 
-def get_soup(url_complete, driver=None):
+def get_soup_wait_to_load(url_complete, driver=None) -> (BeautifulSoup, webdriver.Chrome):
+    """
+    uses a selenium webdriver to navigate to the selected webpage and waits for the 'tr' tag to load
+    :param url_complete: the complete url with date to load
+    :param driver: webdriver, if None one will be instantiated
+    :return: BeautifulSoup object of the webpage, the webdriver used
+    """
     if not driver:
         driver = webdriver.Chrome(_chromedriver_path)
     driver.get(url_complete)
     # wait until the tr (table row) tag loads before continuing
-    element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'tr')))
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'tr')))
+    # sometimes that is not enough for Actual Time (bottom of the table) so adding just a bit more
     sleep(.75)
     soup = BeautifulSoup(driver.page_source, 'lxml')
     return soup, driver
 
 
-def get_daily_feature_wu(soup: BeautifulSoup, feature_name: str):
+def get_daily_feature_wu(soup: BeautifulSoup, feature_name: str) -> Union[float, None]:
     """
-    This function scrapes data from wunderground.com's historical data pages.  This specifically scrapes from the daily
-    data and only pulls the "Actual" column from the table. Some feature include "High Temp", "Low Temp", etc.
+    This function scrapes data from wunderground.com's historical data pages.  This specifically
+    scrapes from the daily data and only pulls the "Actual" column from the table. Some feature
+    include "High Temp", "Low Temp", etc.
     :param soup: BeautifulSoup object of a wundergroud.com historical data page
-    :param feature_name: feature to scrape most are numeric fields except "Actual Time" which is the length of day
-                         string formatted "##h ##m"
+    :param feature_name: feature to scrape most are numeric fields except "Actual Time" which is the
+                         length of day string formatted "##h ##m"
     :return: numeric value of the feature being scraped
     """
     # adding logic for precipitation field because the actual tag varies a bit
@@ -110,29 +154,63 @@ def get_daily_feature_wu(soup: BeautifulSoup, feature_name: str):
 
 
 def get_hourly_table_wu(soup: BeautifulSoup, date_obj: date) -> pd.DataFrame:
+    """
+    uses pandas to read the html table (this is surprisingly effective) but returns only
+    strings with units to be parsed later
+    :param soup: BeatifulSoup object of the webpage
+    :param date_obj: date being queried
+    :return: dataframe of the hourly table data
+    """
     hourly_table = pd.read_html(str(soup.select('table')[2]))[0]
     hourly_table['Date'] = date_obj
     return hourly_table
 
 
-def hour_mins_to_mins(hr_min_str: str):
+def hour_mins_to_mins(hr_min_str: str) -> int:
+    """
+    converts strings of the form "XXh XXm" to an integer representing minutes
+    :param hr_min_str: string with hours and mins in the format "XXh XXm"
+    :return: minutes
+    """
     split_str = hr_min_str.split(' ')
-    min = int(split_str[0][:-1])*60 + int(split_str[1][:-1])
-    return min
+    mins = int(split_str[0][:-1]) * 60 + int(split_str[1][:-1])
+    return mins
 
 
-def get_wunder_creds(file_path: str='keys/wunderground.yml'):
+def get_wunder_creds(file_path: str = 'keys/wunderground.yml') -> dict:
+    """
+    reads the helper yaml file to get the base url, the features to query and the start and end
+    dates. Should read something like this:
+    {
+    url: "", features: {"WU_feature": "new feature name"},
+    dates: {start: "YYYY-MM-DD", end: "YYYY-MM-DD}
+    }
+    :param file_path: path to helper file
+    :return: dictionary contents of the file
+    """
     yml_dict = yaml.safe_load(open(file_path))
     return yml_dict
 
 
-def drange_rev(start_date: date, end_date: date):
+def drange_rev(start_date: date, end_date: date) -> Iterator[date]:
+    """
+    this generator yields dates that it decrements from end_date to start_date inclusive
+    :param start_date: earliest date
+    :param end_date: latest date
+    """
     days = int((end_date - start_date).days)
     for ind in range(days + 1):
         yield end_date - timedelta(ind)
 
 
 def save_daily(daily_df: pd.DataFrame, start_date: date, end_date: date):
+    """
+    takes the dataframe of daily data and saves it to a csv in /outputs/ with dates in the filename
+    :param daily_df: dataframe to save
+    :param start_date: starting date of the data frame (this could be looked up but its faster this
+                       way)
+    :param end_date: ending date of the data frame (this could be looked up but its faster this way)
+    """
     file_path = 'outputs/daily_{}_{}.csv'
     start = start_date.strftime('%Y%m%d')
     end = end_date.strftime('%Y%m%d')
@@ -140,6 +218,13 @@ def save_daily(daily_df: pd.DataFrame, start_date: date, end_date: date):
 
 
 def save_hourly(hourly_df: pd.DataFrame, start_date: date, end_date: date):
+    """
+    takes the dataframe of hourly data and saves it to a csv in /outputs/ with dates in the filename
+    :param hourly_df: dataframe to save
+    :param start_date: starting date of the data frame (this could be looked up but its faster this
+                       way)
+    :param end_date: ending date of the data frame (this could be looked up but its faster this way)
+    """
     file_path = 'outputs/hourly_{}_{}.csv'
     start = start_date.strftime('%Y%m%d')
     end = end_date.strftime('%Y%m%d')
@@ -147,12 +232,18 @@ def save_hourly(hourly_df: pd.DataFrame, start_date: date, end_date: date):
 
 
 def main():
+    """
+    main script saves results to 2 csvs in /outputs/
+    """
     wu_setup_dict = get_wunder_creds()
     base_url = wu_setup_dict['url']
     daily_features_mapping = wu_setup_dict['features']
     start = wu_setup_dict['dates']['start']
     stop = wu_setup_dict['dates']['end']
-    daily_results, hourly_results, driver = wu_hist_scraper(base_url, start, stop, daily_features_mapping)
+    daily_results, hourly_results, driver = wu_hist_scraper(base_url,
+                                                            start,
+                                                            stop,
+                                                            daily_features_mapping)
     save_daily(daily_results, start, stop)
     save_hourly(hourly_results, start, stop)
     driver.quit()
@@ -161,6 +252,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
