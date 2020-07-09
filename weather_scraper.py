@@ -20,11 +20,12 @@ os.environ["webdriver.chrome.driver"] = _chromedriver_path
 
 _missing_value_count = 0
 
+
 def wu_hist_scraper(base_url: str,
                     start_date: date,
                     end_date: date,
                     feature_dict: dict,
-                    driver: webdriver.Chrome = None) -> (DailyDict,
+                    driver: webdriver.Chrome = None) -> (pd.DataFrame,
                                                          pd.DataFrame,
                                                          webdriver.Chrome):
     """
@@ -34,7 +35,8 @@ def wu_hist_scraper(base_url: str,
     :param end_date: ending date in date format
     :param feature_dict: list of features to extract from the daily table
     :param driver: selenium instance of a webdriver
-    :return:
+    :return: daily_df a dataframe of daily data, hourly_df a dataframe of hourly data,
+             and driver the webdriver instance
     """
     daily_dict = {}
     hourly_list = []
@@ -49,8 +51,9 @@ def wu_hist_scraper(base_url: str,
         hourly_list.append(hourly_table)
         print('Success')
     hourly_df = pd.concat(hourly_list)
+    daily_df = pd.DataFrame(daily_dict).T
 
-    return daily_dict, hourly_df, driver
+    return daily_df, hourly_df, driver
 
 
 def get_daily_features_wu(soup: BeautifulSoup, feature_dict: Dict[str, str]) -> Dict[str, float]:
@@ -68,7 +71,7 @@ def get_soup(url_complete, driver=None):
     driver.get(url_complete)
     # wait until the tr (table row) tag loads before continuing
     element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'tr')))
-    sleep(1)
+    sleep(.75)
     soup = BeautifulSoup(driver.page_source, 'lxml')
     return soup, driver
 
@@ -82,7 +85,13 @@ def get_daily_feature_wu(soup: BeautifulSoup, feature_name: str):
                          string formatted "##h ##m"
     :return: numeric value of the feature being scraped
     """
-    feature_loc = soup.find(text=feature_name)
+    # adding logic for precipitation field because the actual tag varies a bit
+    # only need to match the start of the string
+    if len(feature_name) > 20:
+        feature_abr = feature_name[0:20]
+        feature_loc = soup.find(text=lambda string: string and string.startswith(feature_abr))
+    else:
+        feature_loc = soup.find(text=feature_name)
     try:
         value_actual = feature_loc.find_next()
     except AttributeError:
@@ -123,12 +132,11 @@ def drange_rev(start_date: date, end_date: date):
         yield end_date - timedelta(ind)
 
 
-def save_daily(daily_dict: DailyDict, start_date: date, end_date: date):
+def save_daily(daily_df: pd.DataFrame, start_date: date, end_date: date):
     file_path = 'outputs/daily_{}_{}.csv'
     start = start_date.strftime('%Y%m%d')
     end = end_date.strftime('%Y%m%d')
-    df = pd.DataFrame(daily_dict).T
-    df.to_csv(file_path.format(start, end))
+    daily_df.to_csv(file_path.format(start, end))
 
 
 def save_hourly(hourly_df: pd.DataFrame, start_date: date, end_date: date):
