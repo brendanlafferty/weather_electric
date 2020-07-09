@@ -68,6 +68,7 @@ def get_soup(url_complete, driver=None):
     driver.get(url_complete)
     # wait until the tr (table row) tag loads before continuing
     element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'tr')))
+    sleep(1)
     soup = BeautifulSoup(driver.page_source, 'lxml')
     return soup, driver
 
@@ -85,9 +86,11 @@ def get_daily_feature_wu(soup: BeautifulSoup, feature_name: str):
     try:
         value_actual = feature_loc.find_next()
     except AttributeError:
-        _missing_value_count +=1
-        print('Warning {} is did not load'.format(feature_name))
+        global _missing_value_count
+        _missing_value_count += 1
+        print('Warning "{}" did not load'.format(feature_name))
         print('None will be returned instead')
+        print('Missing Value Count: {}'.format(_missing_value_count))
         return None
     value = value_actual.text
     try:
@@ -124,7 +127,7 @@ def save_daily(daily_dict: DailyDict, start_date: date, end_date: date):
     file_path = 'outputs/daily_{}_{}.csv'
     start = start_date.strftime('%Y%m%d')
     end = end_date.strftime('%Y%m%d')
-    df = pd.DataFrame(daily_dict)
+    df = pd.DataFrame(daily_dict).T
     df.to_csv(file_path.format(start, end))
 
 
@@ -135,17 +138,21 @@ def save_hourly(hourly_df: pd.DataFrame, start_date: date, end_date: date):
     hourly_df.to_csv(file_path.format(start, end), index=False)
 
 
-if __name__ == '__main__':
-    yml_d = get_wunder_creds()
-    url = yml_d['url']
-    fields_dict = yml_d['fields']
-    start = yml_d['dates']['start']
-    stop = yml_d['dates']['end']
-    daily_results, hourly_results, driver = wu_hist_scraper(url, start, stop, fields_dict)
+def main():
+    wu_setup_dict = get_wunder_creds()
+    base_url = wu_setup_dict['url']
+    daily_features_mapping = wu_setup_dict['features']
+    start = wu_setup_dict['dates']['start']
+    stop = wu_setup_dict['dates']['end']
+    daily_results, hourly_results, driver = wu_hist_scraper(base_url, start, stop, daily_features_mapping)
     save_daily(daily_results, start, stop)
     save_hourly(hourly_results, start, stop)
-
     driver.quit()
+    print('Missing Value Count: {}'.format(_missing_value_count))
+
+
+if __name__ == '__main__':
+    main()
 
 
 
