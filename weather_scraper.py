@@ -49,8 +49,6 @@ with open('keys/selenium.yml') as fs:
 _chromedriver_path = _sel_dict['webdriver']
 os.environ["webdriver.chrome.driver"] = _chromedriver_path
 
-_missing_value_count = 0
-
 
 def wu_hist_scraper(base_url: str,
                     start_date: date,
@@ -71,12 +69,14 @@ def wu_hist_scraper(base_url: str,
     """
     daily_dict = {}
     hourly_list = []
+    missing_value_count = 0
     for date_obj in drange_rev(start_date, end_date):
         date_str = date_obj.strftime('%Y-%m-%d')
         print('Getting data for: {}'.format(date_str))
         url_whole = base_url + date_str
         soup, driver = get_soup_wait_to_load(url_whole, driver=driver)
-        daily_features = get_daily_features_wu(soup, feature_dict)
+        daily_features, missing_value_count = get_daily_features_wu(soup, feature_dict,
+                                                                    missing_value_count)
         daily_dict[date_obj] = daily_features
         hourly_table = get_hourly_table_wu(soup, date_obj)
         hourly_list.append(hourly_table)
@@ -84,22 +84,25 @@ def wu_hist_scraper(base_url: str,
     hourly_df = pd.concat(hourly_list)
     daily_df = pd.DataFrame(daily_dict).T
 
+    print('Missing Value Count: {}'.format(missing_value_count))
     return daily_df, hourly_df, driver
 
 
-def get_daily_features_wu(soup: BeautifulSoup, feature_dict: Dict[str, str]) -> Dict[str, float]:
+def get_daily_features_wu(soup: BeautifulSoup, feature_dict: Dict[str, str],
+                          missing_count: int) -> (Dict[str, float], int):
     """
     iterates through each feature to be scraped and scrapes that feature
     :param soup: BeautifulSoup of the webpage
     :param feature_dict: a mapping of wunderground.com fields to clean names
-    :return: a dictionary mapping field name to value
+    :param missing_count: the running count of missing values
+    :return: a dictionary mapping field name to value, and the new missing value count
     """
     features = {}
     for feature in feature_dict:
-        value = get_daily_feature_wu(soup, feature)
+        value, missing_count = get_daily_feature_wu(soup, feature, missing_count)
         new_key = feature_dict[feature]
         features[new_key] = value
-    return features
+    return features, missing_count
 
 
 def get_soup_wait_to_load(url_complete, driver=None) -> (BeautifulSoup, webdriver.Chrome):
@@ -120,7 +123,8 @@ def get_soup_wait_to_load(url_complete, driver=None) -> (BeautifulSoup, webdrive
     return soup, driver
 
 
-def get_daily_feature_wu(soup: BeautifulSoup, feature_name: str) -> Union[float, None]:
+def get_daily_feature_wu(soup: BeautifulSoup, feature_name: str,
+                         missing_count: int) -> (Union[float, None], int):
     """
     This function scrapes data from wunderground.com's historical data pages.  This specifically
     scrapes from the daily data and only pulls the "Actual" column from the table. Some feature
@@ -128,7 +132,8 @@ def get_daily_feature_wu(soup: BeautifulSoup, feature_name: str) -> Union[float,
     :param soup: BeautifulSoup object of a wundergroud.com historical data page
     :param feature_name: feature to scrape most are numeric fields except "Actual Time" which is the
                          length of day string formatted "##h ##m"
-    :return: numeric value of the feature being scraped
+    :param missing_count: running count of missing values
+    :return: numeric value of the feature being scraped, returns the new missing count
     """
     # adding logic for precipitation field because the actual tag varies a bit
     # only need to match the start of the string
@@ -140,8 +145,7 @@ def get_daily_feature_wu(soup: BeautifulSoup, feature_name: str) -> Union[float,
     try:
         value_actual = feature_loc.find_next()
     except AttributeError:
-        global _missing_value_count
-        _missing_value_count += 1
+        missing_count += 1
         print('Warning "{}" did not load'.format(feature_name))
         print('None will be returned instead')
         print('Missing Value Count: {}'.format(_missing_value_count))
@@ -151,7 +155,7 @@ def get_daily_feature_wu(soup: BeautifulSoup, feature_name: str) -> Union[float,
         value = float(value)
     except ValueError:
         value = hour_mins_to_mins(value)
-    return value
+    return value, missing_count
 
 
 def get_hourly_table_wu(soup: BeautifulSoup, date_obj: date) -> pd.DataFrame:
@@ -249,7 +253,6 @@ def main():
     save_daily(daily_results, start, stop)
     save_hourly(hourly_results, start, stop)
     driver.quit()
-    print('Missing Value Count: {}'.format(_missing_value_count))
 
 
 if __name__ == '__main__':
