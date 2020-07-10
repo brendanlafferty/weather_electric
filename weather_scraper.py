@@ -8,7 +8,7 @@ selenium.yml:
 
 wunderground.yml:
     url: https://www.wunderground.com/history/daily/--------/date/
-     features:
+    features:
       High Temp: high
       Low Temp: low
       Day Average Temp: temp_mean
