@@ -2,11 +2,11 @@
 This is a web-scraping module for scraping data from wunderground.com specifically historical data
 pages. It requires 2 helper yaml files, 1 has the location of the chrome driver application for
 selenium, the other has all the info for scraping wunderground.com.
-selenium.yml:
+data/selenium.yml:
     webdriver: path/to/chrome-driver
 
 
-wunderground.yml:
+data/wunderground.yml:
     url: https://www.wunderground.com/history/daily/--------/date/
     features:
       High Temp: high
@@ -211,13 +211,13 @@ def drange_rev(start_date: date, end_date: date) -> Iterator[date]:
 
 def save_daily(daily_df: pd.DataFrame, start_date: date, end_date: date):
     """
-    takes the dataframe of daily data and saves it to a csv in /outputs/ with dates in the filename
+    takes the dataframe of daily data and saves it to a csv in /data/ with dates in the filename
     :param daily_df: dataframe to save
     :param start_date: starting date of the data frame (this could be looked up but its faster this
                        way)
     :param end_date: ending date of the data frame (this could be looked up but its faster this way)
     """
-    file_path = 'outputs/daily_{}_{}.csv'
+    file_path = 'data/daily_{}_{}.csv'
     start = start_date.strftime('%Y%m%d')
     end = end_date.strftime('%Y%m%d')
     daily_df.to_csv(file_path.format(start, end))
@@ -225,13 +225,13 @@ def save_daily(daily_df: pd.DataFrame, start_date: date, end_date: date):
 
 def save_hourly(hourly_df: pd.DataFrame, start_date: date, end_date: date):
     """
-    takes the dataframe of hourly data and saves it to a csv in /outputs/ with dates in the filename
+    takes the dataframe of hourly data and saves it to a csv in /data/ with dates in the filename
     :param hourly_df: dataframe to save
     :param start_date: starting date of the data frame (this could be looked up but its faster this
                        way)
     :param end_date: ending date of the data frame (this could be looked up but its faster this way)
     """
-    file_path = 'outputs/hourly_{}_{}.csv'
+    file_path = 'data/hourly_{}_{}.csv'
     start = start_date.strftime('%Y%m%d')
     end = end_date.strftime('%Y%m%d')
     hourly_df.to_csv(file_path.format(start, end), index=False)
@@ -239,7 +239,7 @@ def save_hourly(hourly_df: pd.DataFrame, start_date: date, end_date: date):
 
 def main():
     """
-    main script saves results to 2 csvs in /outputs/
+    main script saves results to 2 csvs in /data/
     """
     wu_setup_dict = get_wunder_creds()
     base_url = wu_setup_dict['url']

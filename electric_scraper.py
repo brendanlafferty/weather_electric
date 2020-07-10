@@ -11,10 +11,10 @@ System arguments are optional
 
 The auto-saver/webscraper uses 2 helper files:
 
-outputs/selenium.yml:
+data/selenium.yml:
     webdriver: path/to/chrome-driver
 
-outputs/electric.yml:
+data/electric.yml:
     login url: --------
     usage url: --------
     dates:
@@ -175,7 +175,7 @@ def diff_months(low: date, high: date) -> int:
     return months
 
 
-def parse(directory: str = 'outputs/') -> pd.DataFrame:
+def parse(directory: str = 'data/') -> pd.DataFrame:
     """"""
     files_gathered = []
     for filename in os.listdir(directory):
