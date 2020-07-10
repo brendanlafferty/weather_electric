@@ -1,11 +1,20 @@
 """
-This is an auto-saver/webscraper for my utilities website to download my usage data it uses 2 helper
-files:
+This module has 2 main functions, 1 an auto-saver/webscraper that navigates through the utilites
+account pages to download the specified data, and 2 a parsing tool to concatenate the files after
+downloading them. This file also accepts (optional) system arguments specifically:
 
-selenium.yml:
+    $ python electric_scraper [mode] [filepath]
+
+where [mode] selects (a)uto-save or (p)arse (just checks for p or parse)
+and [filepath] is the filepath to search for files and where to save the result
+System arguments are optional
+
+The auto-saver/webscraper uses 2 helper files:
+
+outputs/selenium.yml:
     webdriver: path/to/chrome-driver
 
-electric.yml:
+outputs/electric.yml:
     login url: --------
     usage url: --------
     dates:
@@ -14,11 +23,13 @@ electric.yml:
 """
 
 import os
+import sys
 from typing import Iterator
 from time import sleep
 from datetime import date, timedelta, datetime
 
 import yaml
+import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -164,6 +175,23 @@ def diff_months(low: date, high: date) -> int:
     return months
 
 
+def parse(directory: str = 'outputs/') -> pd.DataFrame:
+    """"""
+    files_gathered = []
+    for filename in os.listdir(directory):
+        print(f'File to check: {filename}')
+        if filename.startswith('Usage'):
+            print(f'appending {filename}')
+            files_gathered.append(pd.read_excel(directory+filename, skiprows=4))
+    usage_df = pd.concat(files_gathered)
+    usage_df['Usage Date'] = pd.to_datetime(usage_df['Usage Date']).dt.date
+    usage_df.sort_values('Usage Date', inplace=True)
+    start = usage_df.iloc[0, 0]
+    end = usage_df.iloc[-1, 0]
+    usage_df.to_csv(directory+f'usage_df_{start:%Y%m%d}_{end:%Y%m%d}.csv', index=False)
+    return usage_df
+
+
 def main():
     """
     main script that handles the auto-scraper
@@ -179,4 +207,14 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        ans = sys.argv[1]
+    except IndexError:
+        ans = input('(P)arse or (A)utosave:\n')
+    if ans.lower() in ['p', 'parse']:
+        try:
+            parse(sys.argv[2])
+        except IndexError:
+            parse()
+    else:
+        main()
