@@ -54,6 +54,7 @@ def electric_usage_auto_saver(login_url, usage_url, start_date, end_date, driver
         select_day(prev_date.day, driver)
         download_excel(driver)
         print('Downloaded Excel')
+        current_date_showing = prev_date
 
     return driver
 
