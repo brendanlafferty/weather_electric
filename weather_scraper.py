@@ -7,7 +7,7 @@ selenium.yml:
 
 
 wunderground.yml:
-    url: https://www.wunderground.com/history/daily/--------/date
+    url: https://www.wunderground.com/history/daily/--------/date/
      features:
       High Temp: high
       Low Temp: low
@@ -44,7 +44,8 @@ DataDict = Dict[str, float]
 DailyDict = Dict[date, DataDict]
 HourlyDict = Dict[date, str]
 
-_sel_dict = yaml.safe_load(open('keys/selenium.yml'))
+with open('keys/selenium.yml') as fs:
+    _sel_dict = yaml.safe_load(fs)
 _chromedriver_path = _sel_dict['webdriver']
 os.environ["webdriver.chrome.driver"] = _chromedriver_path
 
@@ -188,7 +189,8 @@ def get_wunder_creds(file_path: str = 'keys/wunderground.yml') -> dict:
     :param file_path: path to helper file
     :return: dictionary contents of the file
     """
-    yml_dict = yaml.safe_load(open(file_path))
+    with open(file_path) as f_stream:
+        yml_dict = yaml.safe_load(f_stream)
     return yml_dict
 
 
@@ -198,7 +200,7 @@ def drange_rev(start_date: date, end_date: date) -> Iterator[date]:
     :param start_date: earliest date
     :param end_date: latest date
     """
-    days = int((end_date - start_date).days)
+    days = (end_date - start_date).days
     for ind in range(days + 1):
         yield end_date - timedelta(ind)
 
