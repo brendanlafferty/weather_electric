@@ -118,7 +118,7 @@ def get_soup_wait_to_load(url_complete, driver=None) -> (BeautifulSoup, webdrive
     # wait until the tr (table row) tag loads before continuing
     WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, 'tr')))
     # sometimes that is not enough for Actual Time (bottom of the table) so adding just a bit more
-    sleep(.75)
+    sleep(.5)
     soup = BeautifulSoup(driver.page_source, 'lxml')
     return soup, driver
 
@@ -148,7 +148,7 @@ def get_daily_feature_wu(soup: BeautifulSoup, feature_name: str,
         missing_count += 1
         print('Warning "{}" did not load'.format(feature_name))
         print('None will be returned instead')
-        print('Missing Value Count: {}'.format(_missing_value_count))
+        print('Missing Value Count: {}'.format(missing_count))
         return None
     value = value_actual.text
     try:
